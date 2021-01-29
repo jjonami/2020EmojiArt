@@ -6,21 +6,36 @@
 //
 
 import SwiftUI
+import Combine
 
-class EmojiArtDocument: ObservableObject {
+class EmojiArtDocument: ObservableObject, Hashable, Identifiable {
+    
+    static func == (lhs: EmojiArtDocument, rhs: EmojiArtDocument) -> Bool {
+        lhs.id == rhs.id
+    }
+    
+    let id: UUID
+    
+    func hash(into hasher: inout Hasher) {
+          hasher.combine(id)
+    }
     
     static let palette: String = "🥐🥯🍞🥨🥞🧇"
     
-    @Published private var emojiArt: EmojiArt {
-        didSet {
-            UserDefaults.standard.set(emojiArt.json, forKey: EmojiArtDocument.untitled)
+    @Published private var emojiArt: EmojiArt
+    
+    @Published var steadyStateZoomScale: CGFloat = 1.0
+    @Published var steadyStatePanOffset: CGSize = .zero
+    
+    private var autosaveCancellabe: AnyCancellable?
+    
+    init(id: UUID? = nil) {
+        self.id = id ?? UUID()
+        let defaultsKey = "EmojiArtDocument.\(self.id.uuidString)"
+        emojiArt = EmojiArt(json: UserDefaults.standard.data(forKey: defaultsKey)) ?? EmojiArt()
+        autosaveCancellabe = $emojiArt.sink { emojiArt in
+            UserDefaults.standard.set(emojiArt.json, forKey: defaultsKey)
         }
-    }
-    
-    private static let untitled = "EmojiArtDocument.Untitled"
-    
-    init() {
-        emojiArt = EmojiArt(json: UserDefaults.standard.data(forKey: EmojiArtDocument.untitled)) ?? EmojiArt()
         fetchBackgroundImageData()
     }
     
@@ -47,23 +62,28 @@ class EmojiArtDocument: ObservableObject {
         }
     }
     
-    func setBackgroundURL(_ url: URL?){
-        emojiArt.backgroudURL = url?.imageURL
-        fetchBackgroundImageData()
+    var backgroundURL: URL?{
+        get {
+            emojiArt.backgroudURL
+        }
+        set {
+            emojiArt.backgroudURL = newValue?.imageURL
+            fetchBackgroundImageData()
+
+        }
     }
     
-    func fetchBackgroundImageData(){
+    private var fetchImageCancellable: AnyCancellable?
+    
+    private func fetchBackgroundImageData(){
         backgroundImage = nil
         if let url = self.emojiArt.backgroudURL {
-            DispatchQueue.global(qos: .userInitiated).async {
-                if let imageData = try? Data(contentsOf: url){
-                    DispatchQueue.main.async {
-                        if url == self.emojiArt.backgroudURL{
-                            self.backgroundImage = UIImage(data: imageData)
-                        }
-                    }
-                }
-            }
+            fetchImageCancellable?.cancel()
+            fetchImageCancellable = URLSession.shared.dataTaskPublisher(for: url)
+                .map{ data, URLResponse in UIImage(data: data) }
+                .receive(on: DispatchQueue.main)
+                .replaceError(with: nil)
+                .assign(to: \.backgroundImage, on: self)
         }
     }
 }
@@ -72,3 +92,8 @@ extension EmojiArt.Emoji {
     var fontSize: CGFloat { CGFloat(self.size) }
     var location: CGPoint { CGPoint(x: CGFloat(x), y: CGFloat(y)) }
 }
+
+/**
+ 1. UserDefaults : persistent dictionary => 사용자 기본 설정과 같은 단일 데이터 값에 적합
+ 
+ */

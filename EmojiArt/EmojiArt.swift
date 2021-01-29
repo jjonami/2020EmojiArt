@@ -11,7 +11,7 @@ struct EmojiArt: Codable {
     var backgroudURL: URL?
     var emojis = [Emoji]()
     
-    struct Emoji: Identifiable, Codable {
+    struct Emoji: Identifiable, Codable, Hashable {
         let text: String
         var x: Int // offset from center
         var y: Int // offset from center
@@ -64,4 +64,45 @@ default
 (5) private : 정의한 블록 내부에서만 접근 가능
  
  => 바깥의 접근제어 수준보다 높은 수준의 내부 요소는 있을 수 없다
+ 
+ ===================================
+ 
+ 2. Propeerty Wrappers
+ @Something
+ 
+ computed property의 getter/setter를 기본으로 가진 struct
+ 
+ @Published
+ @Stat
+ @ObservedObjec
+ @Binding
+ @Environment
+ 
+ ex)    @Published var emojiArt: EmojiArt = EmojiArt()
+     ->
+     struct Published {
+        var wrappedValue: EmojiArt
+        var projectedValue: Publisher<EmojiArt, Never> // 주기적으로 값을 내보내는 게시자
+     }
+     
+     var _emojiArt: Published = Published(wrappedValue: EmojiArt())
+     var emojiArt: EmojiArt {
+        get { _emojiArt.wrappedValue }
+        set { _emojiArt.wrappedValue = newValue }
+     }
+ 
+ projectedValue -> using [ $emojiArt ]
+ 
+ > Binding
+ :  Binding provides us a reference like access to a value type. can read and write a value owned by a source of truth
+ 
+ ===================================
+
+ 3. Publisher
+ It is an object that emits values and possibly a failure object if it fails while dogin so.
+ 
+ Publisher<Output, Failure>
+ Oupput : type of the thing this Publisher publishes.
+ Failure : type of the thins it communicates if it fails while trying to publish.
+ 
  */
